@@ -25,6 +25,7 @@ interface ChatState {
   // Async actions
   createNewChat: (title?: string, navigate?: (chatId: string) => void) => Promise<void>;
   loadChats: () => Promise<void>;
+  loadChatMessages: (chatId: string) => Promise<void>;
 }
 
 export const useChatStore = create<ChatState>()(
@@ -101,82 +102,34 @@ export const useChatStore = create<ChatState>()(
         setError: (error) => set({ error }),
 
         // Async actions
-        createNewChat: async (title = 'New Chat', navigate) => {
+        // Async actions
+        createNewChat: async (title?: string, navigate?: (chatId: string) => void) => {
           set({ isCreatingChat: true, error: null });
           
-          if (ENV.IS_DEVELOPMENT) {
-            console.log('Creating new chat with API URL:', ENV.API_URL);
-            console.log('Chat title:', title);
-          }
-          
           try {
-            const result = await chatAPI.createChat(title);
-            
-            if (ENV.IS_DEVELOPMENT) {
-              console.log('API Response:', result);
-            }
-            
-            if (result && result.success) {
-              const newChat: Chat = {
-                id: result.data.id,
-                title: result.data.title,
-                timestamp: new Date(result.data.createdAt).toLocaleTimeString([], { 
-                  hour: '2-digit', 
-                  minute: '2-digit' 
-                }),
-                messages: []
-              };
-              
-              set((state) => ({
-                chats: [newChat, ...state.chats],
-                activeChat: newChat,
-                error: null
-              }));
-              
-              if (ENV.IS_DEVELOPMENT) {
-                console.log('Successfully created chat:', newChat);
-              }
-
-              // Navigate to the new chat URL if navigate function is provided
-              if (navigate) {
-                navigate(newChat.id);
-              }
-            } else {
-              throw new Error('Invalid API response format');
-            }
-          } catch (error) {
-            const errorMessage = error instanceof APIError 
-              ? `API Error (${error.status}): ${error.message}`
-              : error instanceof Error 
-              ? error.message 
-              : 'Unknown error occurred';
-            
-            console.error('Error creating new chat:', {
-              error,
-              apiUrl: ENV.API_URL,
-              message: errorMessage
-            });
-            
-            // Fallback to local creation if API fails
-            const fallbackChat: Chat = {
-              id: Date.now().toString(),
-              title,
-              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            const response = await chatAPI.createChat(title);
+            const newChat: Chat = {
+              id: response.data.id,
+              title: response.data.title,
+              timestamp: 'Now',
               messages: []
             };
             
-            set((state) => ({
-              chats: [fallbackChat, ...state.chats],
-              activeChat: fallbackChat,
-              error: `Failed to create chat on server: ${errorMessage}. Created locally instead.`
+            set((state) => ({ 
+              chats: [newChat, ...state.chats],
+              activeChat: newChat,
+              isCreatingChat: false 
             }));
-
-            // Navigate to fallback chat if navigate function is provided
+            
             if (navigate) {
-              navigate(fallbackChat.id);
+              navigate(newChat.id);
             }
-          } finally {
-            set({ isCreatingChat: false });
+          } catch (error) {
+            console.error('Error creating chat:', error);
+            set({ 
+              error: error instanceof APIError ? error.message : 'Failed to create new chat',
+              isCreatingChat: false 
+            });
           }
         },
 
@@ -184,14 +137,38 @@ export const useChatStore = create<ChatState>()(
           set({ isLoadingChats: true, error: null });
           
           try {
-            const result = await chatAPI.getChats();
-            // Implementation depends on your API response structure
-            // For now, we'll keep the initial chats
+            const response = await chatAPI.getChats();
+            const chats: Chat[] = response.data || [];
+            
+            set({ 
+              chats,
+              isLoadingChats: false,
+              // Set active chat to first one if none is selected
+              activeChat: get().activeChat || (chats.length > 0 ? chats[0] : null)
+            });
           } catch (error) {
             console.error('Error loading chats:', error);
-            set({ error: 'Failed to load chats from server' });
-          } finally {
-            set({ isLoadingChats: false });
+            set({ 
+              error: 'Failed to load chats from server',
+              isLoadingChats: false 
+            });
+          }
+        },
+
+        loadChatMessages: async (chatId: string) => {
+          try {
+            const response = await chatAPI.getChat(chatId);
+            const chatData: Chat = response.data;
+            
+            set((state) => ({
+              chats: state.chats.map(chat => 
+                chat.id === chatId ? chatData : chat
+              ),
+              activeChat: state.activeChat?.id === chatId ? chatData : state.activeChat
+            }));
+          } catch (error) {
+            console.error('Error loading chat messages:', error);
+            set({ error: 'Failed to load chat messages' });
           }
         }
       }),

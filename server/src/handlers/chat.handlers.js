@@ -11,10 +11,111 @@ const ollama = new Ollama();
 const activeStreams = new Map();
 
 const getChatsHandler = async (req, res) => {
-    res.send("Hello World")
+    try {
+        const chats = await prisma.chat.findMany({
+            orderBy: {
+                updatedAt: 'desc' // Most recently updated first
+            },
+            include: {
+                messages: {
+                    orderBy: {
+                        createdAt: 'desc'
+                    },
+                    take: 1 // Only get the latest message for preview
+                }
+            }
+        });
+
+        // Transform the data to match frontend format
+        const transformedChats = chats.map(chat => ({
+            id: chat.id,
+            title: chat.title,
+            timestamp: formatTimestamp(chat.updatedAt),
+            messages: [] // We'll load messages separately when chat is opened
+        }));
+
+        res.json({
+            success: true,
+            data: transformedChats,
+            message: 'Chats retrieved successfully'
+        });
+    } catch (error) {
+        console.error('Error getting chats:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve chats',
+            error: error.message
+        });
+    }
 };
 
-const getChatHandler = async (req, res) => {};
+// Helper function to format timestamps
+const formatTimestamp = (date) => {
+    const now = new Date();
+    const chatDate = new Date(date);
+    const diffMs = now - chatDate;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) {
+        return chatDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else if (diffDays === 1) {
+        return 'Yesterday';
+    } else if (diffDays < 7) {
+        return chatDate.toLocaleDateString([], { weekday: 'short' });
+    } else {
+        return chatDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    }
+};
+
+const getChatHandler = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const chat = await prisma.chat.findUnique({
+            where: { id },
+            include: {
+                messages: {
+                    orderBy: {
+                        createdAt: 'asc' // Messages in chronological order
+                    }
+                }
+            }
+        });
+
+        if (!chat) {
+            return res.status(404).json({
+                success: false,
+                message: 'Chat not found'
+            });
+        }
+
+        // Transform the data to match frontend format
+        const transformedChat = {
+            id: chat.id,
+            title: chat.title,
+            timestamp: formatTimestamp(chat.updatedAt),
+            messages: chat.messages.map(msg => ({
+                id: msg.id,
+                role: msg.role.toLowerCase() === 'user' ? 'user' : 'bot',
+                content: msg.content,
+                timestamp: formatTimestamp(msg.createdAt)
+            }))
+        };
+
+        res.json({
+            success: true,
+            data: transformedChat,
+            message: 'Chat retrieved successfully'
+        });
+    } catch (error) {
+        console.error('Error getting chat:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve chat',
+            error: error.message
+        });
+    }
+};
 
 const createChatHandler = async (req, res) => {
     try {

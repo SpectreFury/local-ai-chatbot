@@ -8,7 +8,12 @@ import { useChatStore } from './stores/chatStore';
 
 export default function Home() {
   const router = useRouter();
-  const { chats } = useChatStore();
+  const { chats, loadChats } = useChatStore();
+
+  useEffect(() => {
+    // Load chats on mount
+    loadChats();
+  }, [loadChats]);
 
   useEffect(() => {
     // If there are chats available, redirect to the first one

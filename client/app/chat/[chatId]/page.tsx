@@ -12,7 +12,7 @@ import { Chat } from '@/app/types/chat';
 export default function ChatPage() {
   const params = useParams();
   const router = useRouter();
-  const { chats, activeChat, setActiveChat } = useChatStore();
+  const { chats, activeChat, setActiveChat, loadChatMessages } = useChatStore();
   const chatId = params.chatId as string;
 
   useEffect(() => {
@@ -20,12 +20,16 @@ export default function ChatPage() {
       const chat = chats.find((c: Chat) => c.id === chatId);
       if (chat) {
         setActiveChat(chat);
+        // Load messages for this chat if they haven't been loaded yet
+        if (chat.messages.length === 0) {
+          loadChatMessages(chatId);
+        }
       } else {
         // Chat not found, redirect to home
         router.push('/');
       }
     }
-  }, [chatId, chats, setActiveChat, router]);
+  }, [chatId, chats, setActiveChat, loadChatMessages, router]);
 
   return (
     <>
