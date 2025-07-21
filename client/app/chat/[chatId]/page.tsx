@@ -76,11 +76,6 @@ export default function ChatPage() {
             </div>
           )}
         </div>
-
-        {/* Footer */}
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
-          <p className="text-sm text-gray-500">Local ChatGPT-style chat</p>
-        </div>
       </main>
     </>
   );
