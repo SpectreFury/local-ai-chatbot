@@ -216,5 +216,32 @@ export const chatAPI = {
       console.error('API Error - stopStream:', error);
       throw error;
     }
+  },
+
+  async updateChat(chatId: string, title: string) {
+    try {
+      const response = await apiFetch(API_ENDPOINTS.UPDATE_CHAT(chatId), {
+        method: 'PUT',
+        body: JSON.stringify({ title }),
+      });
+
+      return response;
+    } catch (error) {
+      console.error('API Error - updateChat:', error);
+      throw error;
+    }
+  },
+
+  async deleteChat(chatId: string) {
+    try {
+      const response = await apiFetch(API_ENDPOINTS.DELETE_CHAT(chatId), {
+        method: 'DELETE',
+      });
+
+      return response;
+    } catch (error) {
+      console.error('API Error - deleteChat:', error);
+      throw error;
+    }
   }
 };

@@ -12,6 +12,8 @@ export const API_ENDPOINTS = {
   CHATS: '/chats',
   CHAT: '/chat',
   CHAT_BY_ID: (id: string) => `/chats/${id}`,
+  UPDATE_CHAT: (id: string) => `/chats/${id}`,
+  DELETE_CHAT: (id: string) => `/chats/${id}`,
   MESSAGE: (chatId: string) => `/chat/${chatId}/message`,
   STOP_CHAT: (chatId: string) => `/chat/${chatId}/stop`,
 } as const;

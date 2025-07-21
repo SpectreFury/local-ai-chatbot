@@ -9,6 +9,7 @@ interface UIState {
   // Streaming state
   activeStreamId: string | null;
   isStreamActive: boolean;
+  isTyping: boolean; // For typing indicator
   
   // UI states
   sidebarCollapsed: boolean;
@@ -19,6 +20,7 @@ interface UIState {
   setIsSendingMessage: (sending: boolean) => void;
   setActiveStreamId: (streamId: string | null) => void;
   setIsStreamActive: (active: boolean) => void;
+  setIsTyping: (typing: boolean) => void;
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
 }
@@ -31,6 +33,7 @@ export const useUIStore = create<UIState>()(
       isSendingMessage: false,
       activeStreamId: null,
       isStreamActive: false,
+      isTyping: false,
       sidebarCollapsed: false,
 
       // Actions
@@ -39,6 +42,7 @@ export const useUIStore = create<UIState>()(
       setIsSendingMessage: (sending) => set({ isSendingMessage: sending }),
       setActiveStreamId: (streamId) => set({ activeStreamId: streamId }),
       setIsStreamActive: (active) => set({ isStreamActive: active }),
+      setIsTyping: (typing) => set({ isTyping: typing }),
       toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
       setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
     }),

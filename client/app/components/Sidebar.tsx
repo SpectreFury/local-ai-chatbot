@@ -1,9 +1,12 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useChatStore } from '@/app/stores/chatStore';
 import { Chat } from '@/app/types/chat';
+import ChatContextMenu from './ChatContextMenu';
+import RenameDialog from './RenameDialog';
+import DeleteConfirmDialog from './DeleteConfirmDialog';
 
 export default function Sidebar() {
   const router = useRouter();
@@ -14,8 +17,30 @@ export default function Sidebar() {
     isLoadingChats, 
     createNewChat, 
     setActiveChat, 
-    loadChats 
+    loadChats,
+    renameChat,
+    deleteChat
   } = useChatStore();
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    isOpen: boolean;
+    chatId: string | null;
+    position: { x: number; y: number };
+  }>({ isOpen: false, chatId: null, position: { x: 0, y: 0 } });
+
+  // Dialog states
+  const [renameDialog, setRenameDialog] = useState<{
+    isOpen: boolean;
+    chatId: string | null;
+    currentTitle: string;
+  }>({ isOpen: false, chatId: null, currentTitle: '' });
+
+  const [deleteDialog, setDeleteDialog] = useState<{
+    isOpen: boolean;
+    chatId: string | null;
+    chatTitle: string;
+  }>({ isOpen: false, chatId: null, chatTitle: '' });
 
   useEffect(() => {
     // Load chats when component mounts
@@ -31,6 +56,56 @@ export default function Sidebar() {
   const handleChatClick = (chat: Chat) => {
     setActiveChat(chat);
     router.push(`/chat/${chat.id}`);
+  };
+
+  const handleRightClick = (e: React.MouseEvent, chat: Chat) => {
+    e.preventDefault();
+    setContextMenu({
+      isOpen: true,
+      chatId: chat.id,
+      position: { x: e.clientX, y: e.clientY }
+    });
+  };
+
+  const handleRename = () => {
+    const chat = chats.find(c => c.id === contextMenu.chatId);
+    if (chat) {
+      setRenameDialog({
+        isOpen: true,
+        chatId: chat.id,
+        currentTitle: chat.title
+      });
+    }
+  };
+
+  const handleDelete = () => {
+    const chat = chats.find(c => c.id === contextMenu.chatId);
+    if (chat) {
+      setDeleteDialog({
+        isOpen: true,
+        chatId: chat.id,
+        chatTitle: chat.title
+      });
+    }
+  };
+
+  const confirmRename = async (newTitle: string) => {
+    if (renameDialog.chatId) {
+      await renameChat(renameDialog.chatId, newTitle);
+      setRenameDialog({ isOpen: false, chatId: null, currentTitle: '' });
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (deleteDialog.chatId) {
+      await deleteChat(deleteDialog.chatId, () => {
+        // Navigate to home if we deleted the active chat
+        if (activeChat?.id === deleteDialog.chatId) {
+          router.push('/');
+        }
+      });
+      setDeleteDialog({ isOpen: false, chatId: null, chatTitle: '' });
+    }
   };
 
   return (
@@ -74,6 +149,7 @@ export default function Sidebar() {
             <div
               key={chat.id}
               onClick={() => handleChatClick(chat)}
+              onContextMenu={(e) => handleRightClick(e, chat)}
               className={`px-4 py-3 cursor-pointer border-l-4 ${
                 activeChat?.id === chat.id 
                   ? 'bg-white border-blue-500 shadow-sm' 
@@ -88,6 +164,31 @@ export default function Sidebar() {
           ))
         )}
       </div>
+
+      {/* Context Menu */}
+      <ChatContextMenu
+        isOpen={contextMenu.isOpen}
+        onClose={() => setContextMenu({ isOpen: false, chatId: null, position: { x: 0, y: 0 } })}
+        onRename={handleRename}
+        onDelete={handleDelete}
+        position={contextMenu.position}
+      />
+
+      {/* Rename Dialog */}
+      <RenameDialog
+        isOpen={renameDialog.isOpen}
+        currentTitle={renameDialog.currentTitle}
+        onClose={() => setRenameDialog({ isOpen: false, chatId: null, currentTitle: '' })}
+        onConfirm={confirmRename}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteConfirmDialog
+        isOpen={deleteDialog.isOpen}
+        chatTitle={deleteDialog.chatTitle}
+        onClose={() => setDeleteDialog({ isOpen: false, chatId: null, chatTitle: '' })}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

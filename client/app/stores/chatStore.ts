@@ -26,6 +26,9 @@ interface ChatState {
   createNewChat: (title?: string, navigate?: (chatId: string) => void) => Promise<void>;
   loadChats: () => Promise<void>;
   loadChatMessages: (chatId: string) => Promise<void>;
+  renameChat: (chatId: string, newTitle: string) => Promise<void>;
+  deleteChat: (chatId: string, navigate?: () => void) => Promise<void>;
+  retryMessage: (chatId: string, messageId: string, originalContent: string) => Promise<void>;
 }
 
 export const useChatStore = create<ChatState>()(
@@ -160,15 +163,90 @@ export const useChatStore = create<ChatState>()(
             const response = await chatAPI.getChat(chatId);
             const chatData: Chat = response.data;
             
-            set((state) => ({
-              chats: state.chats.map(chat => 
-                chat.id === chatId ? chatData : chat
-              ),
-              activeChat: state.activeChat?.id === chatId ? chatData : state.activeChat
-            }));
+            set((state) => {
+              // Check if chat already exists in the list
+              const existingChatIndex = state.chats.findIndex(chat => chat.id === chatId);
+              
+              if (existingChatIndex >= 0) {
+                // Update existing chat
+                const updatedChats = [...state.chats];
+                updatedChats[existingChatIndex] = chatData;
+                
+                return {
+                  chats: updatedChats,
+                  activeChat: state.activeChat?.id === chatId ? chatData : state.activeChat
+                };
+              } else {
+                // Add new chat to the list
+                return {
+                  chats: [chatData, ...state.chats],
+                  activeChat: chatData
+                };
+              }
+            });
           } catch (error) {
             console.error('Error loading chat messages:', error);
             set({ error: 'Failed to load chat messages' });
+            throw error; // Re-throw so the caller can handle it
+          }
+        },
+
+        renameChat: async (chatId: string, newTitle: string) => {
+          try {
+            const response = await chatAPI.updateChat(chatId, newTitle);
+            
+            set((state) => ({
+              chats: state.chats.map(chat => 
+                chat.id === chatId ? { ...chat, title: newTitle } : chat
+              ),
+              activeChat: state.activeChat?.id === chatId 
+                ? { ...state.activeChat, title: newTitle } 
+                : state.activeChat
+            }));
+          } catch (error) {
+            console.error('Error renaming chat:', error);
+            set({ error: 'Failed to rename chat' });
+          }
+        },
+
+        deleteChat: async (chatId: string, navigate?: () => void) => {
+          try {
+            await chatAPI.deleteChat(chatId);
+            
+            const state = get();
+            const updatedChats = state.chats.filter(chat => chat.id !== chatId);
+            
+            set({
+              chats: updatedChats,
+              activeChat: state.activeChat?.id === chatId ? null : state.activeChat
+            });
+            
+            // Navigate away if we deleted the active chat
+            if (navigate && state.activeChat?.id === chatId) {
+              navigate();
+            }
+          } catch (error) {
+            console.error('Error deleting chat:', error);
+            set({ error: 'Failed to delete chat' });
+          }
+        },
+
+        retryMessage: async (chatId: string, messageId: string, originalContent: string) => {
+          const { updateMessageInChat } = get();
+          
+          try {
+            // Mark message as retrying
+            updateMessageInChat(chatId, messageId, { isRetrying: true, error: false });
+            
+            // Attempt to resend the message by creating a new user message
+            await chatAPI.createMessage(chatId, originalContent, 'user');
+            
+            // If successful, clear the retry state
+            updateMessageInChat(chatId, messageId, { isRetrying: false, error: false });
+          } catch (error) {
+            console.error('Failed to retry message:', error);
+            // Mark as failed again
+            updateMessageInChat(chatId, messageId, { isRetrying: false, error: true });
           }
         }
       }),

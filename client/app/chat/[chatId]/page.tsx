@@ -12,21 +12,46 @@ import { Chat } from '@/app/types/chat';
 export default function ChatPage() {
   const params = useParams();
   const router = useRouter();
-  const { chats, activeChat, setActiveChat, loadChatMessages } = useChatStore();
+  const { chats, activeChat, setActiveChat, loadChatMessages, loadChats } = useChatStore();
   const chatId = params.chatId as string;
 
   useEffect(() => {
-    if (chatId && chats.length > 0) {
+    // Load chats first if they're not loaded
+    if (chats.length === 0) {
+      loadChats();
+    }
+  }, [chats.length, loadChats]);
+
+  useEffect(() => {
+    if (chatId) {
+      // Try to find the chat in the existing chats
       const chat = chats.find((c: Chat) => c.id === chatId);
+      
       if (chat) {
+        // Chat found in the list, set it as active and load messages if needed
         setActiveChat(chat);
-        // Load messages for this chat if they haven't been loaded yet
         if (chat.messages.length === 0) {
           loadChatMessages(chatId);
         }
-      } else {
-        // Chat not found, redirect to home
+      } else if (chats.length > 0) {
+        // Chats are loaded but this chat ID doesn't exist, redirect to home
         router.push('/');
+      } else {
+        // Chats not loaded yet, try to load this specific chat directly
+        loadChatMessages(chatId).then(() => {
+          // After loading, check if it was successful by looking in the store
+          const updatedChats = useChatStore.getState().chats;
+          const loadedChat = updatedChats.find((c: Chat) => c.id === chatId);
+          if (loadedChat) {
+            setActiveChat(loadedChat);
+          } else {
+            // Chat doesn't exist, redirect to home
+            router.push('/');
+          }
+        }).catch(() => {
+          // Failed to load chat, redirect to home
+          router.push('/');
+        });
       }
     }
   }, [chatId, chats, setActiveChat, loadChatMessages, router]);

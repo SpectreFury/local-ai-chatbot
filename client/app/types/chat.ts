@@ -3,6 +3,8 @@ export interface Message {
   role: 'user' | 'bot';
   content: string;
   timestamp: string;
+  error?: boolean; // Indicates if message failed to send
+  isRetrying?: boolean; // Indicates if currently retrying
 }
 
 export interface Chat {
