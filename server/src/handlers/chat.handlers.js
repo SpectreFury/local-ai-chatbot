@@ -7,6 +7,9 @@ dotenv.config();
 // Initialize Ollama instance
 const ollama = new Ollama();
 
+// Stream management - track active streams for stopping
+const activeStreams = new Map();
+
 const getChatsHandler = async (req, res) => {
     res.send("Hello World")
 };
@@ -93,9 +96,26 @@ const createMessageHandler = async (req, res) => {
         });
 
         let assistantResponse = '';
+        
+        // Generate a unique stream ID for this request
+        const streamId = `${chatId}-${Date.now()}`;
+        let streamAborted = false;
 
         console.log('Using Ollama model:', process.env.OLLAMA_MODEL || 'gemma3:1b');
         console.log('Conversation history length:', conversationHistory.length);
+        console.log('Stream ID:', streamId);
+
+        // Register this stream as active
+        activeStreams.set(streamId, {
+            chatId,
+            abort: () => {
+                streamAborted = true;
+                console.log('Stream aborted:', streamId);
+            }
+        });
+
+        // Send the stream ID to client in headers so it can be used for stopping
+        res.setHeader('X-Stream-Id', streamId);
 
         try {
             // Create a transform stream to pipe tokens
@@ -125,6 +145,12 @@ const createMessageHandler = async (req, res) => {
             const tokenTransform = new Transform({
                 objectMode: true,
                 transform(chunk, encoding, callback) {
+                    // Check if stream has been aborted
+                    if (streamAborted) {
+                        callback(new Error('Stream aborted by user'));
+                        return;
+                    }
+
                     if (chunk.message?.content) {
                         const content = chunk.message.content;
                         assistantResponse += content;
@@ -140,11 +166,17 @@ const createMessageHandler = async (req, res) => {
             (async () => {
                 try {
                     for await (const chunk of ollamaStream) {
+                        // Check for abort before processing each chunk
+                        if (streamAborted) {
+                            break;
+                        }
                         ollamaReadable.push(chunk);
                     }
                     ollamaReadable.push(null); // End the stream
                 } catch (error) {
-                    ollamaReadable.destroy(error);
+                    if (!streamAborted) {
+                        ollamaReadable.destroy(error);
+                    }
                 }
             })();
 
@@ -156,10 +188,19 @@ const createMessageHandler = async (req, res) => {
             );
 
             // Save assistant response to database after streaming completes
-            if (assistantResponse) {
+            if (assistantResponse && !streamAborted) {
                 await prisma.message.create({
                     data: {
                         content: assistantResponse,
+                        role: 'ASSISTANT',
+                        chatId
+                    }
+                });
+            } else if (streamAborted && assistantResponse) {
+                // Save partial response if stream was stopped
+                await prisma.message.create({
+                    data: {
+                        content: assistantResponse + ' [Response stopped by user]',
                         role: 'ASSISTANT',
                         chatId
                     }
@@ -169,8 +210,8 @@ const createMessageHandler = async (req, res) => {
         } catch (ollamaError) {
             console.error('Ollama streaming error:', ollamaError);
             
-            // Send error message to client if headers haven't been sent
-            if (!res.headersSent) {
+            // Send error message to client if headers haven't been sent and stream wasn't aborted
+            if (!res.headersSent && !streamAborted) {
                 const errorMessage = 'Sorry, I encountered an error processing your message. Please make sure Ollama is running with the gemma3:1b model.';
                 res.write(errorMessage);
                 
@@ -185,10 +226,19 @@ const createMessageHandler = async (req, res) => {
             }
             
             res.end();
+        } finally {
+            // Clean up the stream from active streams
+            activeStreams.delete(streamId);
         }
 
     } catch (error) {
         console.error('Error creating message:', error);
+        
+        // Clean up the stream from active streams if it exists
+        const streamId = `${req.params.chatId}-${Date.now()}`;
+        if (activeStreams.has(streamId)) {
+            activeStreams.delete(streamId);
+        }
         
         if (!res.headersSent) {
             res.status(500).json({
@@ -202,7 +252,59 @@ const createMessageHandler = async (req, res) => {
     }
 };
 
-const stopChatHandler = async (req, res) => {};
+const stopChatHandler = async (req, res) => {
+    try {
+        const { chatId } = req.params;
+        const { streamId } = req.body; // Stream ID sent from frontend
+
+        if (!chatId) {
+            return res.status(400).json({
+                success: false,
+                message: 'ChatId is required'
+            });
+        }
+
+        console.log('Stop request received for chatId:', chatId, 'streamId:', streamId);
+        console.log('Active streams:', Array.from(activeStreams.keys()));
+
+        let stoppedCount = 0;
+
+        if (streamId && activeStreams.has(streamId)) {
+            // Stop specific stream
+            const stream = activeStreams.get(streamId);
+            if (stream.chatId === chatId) {
+                stream.abort();
+                activeStreams.delete(streamId);
+                stoppedCount = 1;
+            }
+        } else {
+            // Stop all active streams for this chat (fallback)
+            for (const [id, stream] of activeStreams.entries()) {
+                if (stream.chatId === chatId) {
+                    stream.abort();
+                    activeStreams.delete(id);
+                    stoppedCount++;
+                }
+            }
+        }
+
+        res.json({
+            success: true,
+            message: stoppedCount > 0 
+                ? `Stopped ${stoppedCount} active stream(s)` 
+                : 'No active streams found for this chat',
+            stoppedCount
+        });
+
+    } catch (error) {
+        console.error('Error stopping chat:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to stop chat stream',
+            error: error.message
+        });
+    }
+};
 
 
 export { getChatHandler, getChatsHandler, createChatHandler, createMessageHandler, stopChatHandler  };

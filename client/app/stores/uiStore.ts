@@ -6,6 +6,10 @@ interface UIState {
   inputMessage: string;
   isSendingMessage: boolean;
   
+  // Streaming state
+  activeStreamId: string | null;
+  isStreamActive: boolean;
+  
   // UI states
   sidebarCollapsed: boolean;
   
@@ -13,6 +17,8 @@ interface UIState {
   setInputMessage: (message: string) => void;
   clearInputMessage: () => void;
   setIsSendingMessage: (sending: boolean) => void;
+  setActiveStreamId: (streamId: string | null) => void;
+  setIsStreamActive: (active: boolean) => void;
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
 }
@@ -23,12 +29,16 @@ export const useUIStore = create<UIState>()(
       // Initial state
       inputMessage: '',
       isSendingMessage: false,
+      activeStreamId: null,
+      isStreamActive: false,
       sidebarCollapsed: false,
 
       // Actions
       setInputMessage: (message) => set({ inputMessage: message }),
       clearInputMessage: () => set({ inputMessage: '' }),
       setIsSendingMessage: (sending) => set({ isSendingMessage: sending }),
+      setActiveStreamId: (streamId) => set({ activeStreamId: streamId }),
+      setIsStreamActive: (active) => set({ isStreamActive: active }),
       toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
       setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
     }),

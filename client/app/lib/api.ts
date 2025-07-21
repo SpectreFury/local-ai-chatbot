@@ -55,7 +55,8 @@ export const chatAPI = {
     content: string, 
     onChunk: (chunk: string) => void,
     onComplete: (fullResponse: string) => void,
-    onError: (error: Error) => void
+    onError: (error: Error) => void,
+    onStreamId?: (streamId: string) => void // Callback to receive stream ID
   ) {
     try {
       const response = await fetch(buildApiUrl(API_ENDPOINTS.MESSAGE(chatId)), {
@@ -73,6 +74,12 @@ export const chatAPI = {
 
       if (!response.body) {
         throw new Error('Response body is not readable');
+      }
+
+      // Get stream ID from response headers for stop functionality
+      const streamId = response.headers.get('X-Stream-Id');
+      if (streamId && onStreamId) {
+        onStreamId(streamId);
       }
 
       // Use modern ReadableStream API with async iteration
@@ -194,6 +201,20 @@ export const chatAPI = {
     } catch (error) {
       console.error('API Error - streamMessageWithTransform:', error);
       onError(error instanceof Error ? error : new Error('Transform streaming error'));
+    }
+  },
+
+  async stopStream(chatId: string, streamId?: string) {
+    try {
+      const response = await apiFetch(API_ENDPOINTS.STOP_CHAT(chatId), {
+        method: 'POST',
+        body: JSON.stringify({ streamId }),
+      });
+
+      return response;
+    } catch (error) {
+      console.error('API Error - stopStream:', error);
+      throw error;
     }
   }
 };

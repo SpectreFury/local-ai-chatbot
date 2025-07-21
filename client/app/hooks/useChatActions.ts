@@ -5,12 +5,19 @@ import { chatAPI } from '@/app/lib/api';
 
 export const useChatActions = () => {
   const { activeChat, addMessageToChat, updateChat, updateMessageInChat } = useChatStore();
-  const { inputMessage, clearInputMessage, setIsSendingMessage } = useUIStore();
+  const { 
+    inputMessage, 
+    clearInputMessage, 
+    setActiveStreamId, 
+    setIsStreamActive,
+    activeStreamId 
+  } = useUIStore();
 
   const sendMessage = async () => {
     if (!inputMessage.trim() || !activeChat) return;
 
-    setIsSendingMessage(true);
+    // Set stream active immediately to show stop button
+    setIsStreamActive(true);
     
     try {
       // Add user message
@@ -59,7 +66,7 @@ export const useChatActions = () => {
             content: accumulatedContent
           });
         },
-        // On streaming complete
+                // On streaming complete
         (fullResponse: string) => {
           console.log('Streaming complete. Full response length:', fullResponse.length);
           
@@ -67,6 +74,10 @@ export const useChatActions = () => {
           updateMessageInChat(activeChat.id, botMessageId, {
             content: fullResponse
           });
+          
+          // Clear stream state
+          setActiveStreamId(null);
+          setIsStreamActive(false);
         },
         // On error
         (error: Error) => {
@@ -74,12 +85,21 @@ export const useChatActions = () => {
           
           const errorMessage = error.message.includes('fetch') 
             ? 'Connection error: Please make sure the server is running.'
-            : 'AI Error: Please make sure Ollama is running with the gemma2:2b model.';
+            : 'AI Error: Please make sure Ollama is running with the gemma3:1b model.';
             
           // Update bot message with error
           updateMessageInChat(activeChat.id, botMessageId, {
             content: errorMessage
           });
+          
+          // Clear stream state
+          setActiveStreamId(null);
+          setIsStreamActive(false);
+        },
+        // On stream ID received
+        (streamId: string) => {
+          console.log('Stream ID received:', streamId);
+          setActiveStreamId(streamId);
         }
       );
 
@@ -96,11 +116,32 @@ export const useChatActions = () => {
       
       addMessageToChat(activeChat.id, errorMessage);
     } finally {
-      setIsSendingMessage(false);
+      setIsStreamActive(false);
+      setActiveStreamId(null);
+    }
+  };
+
+  const stopStream = async () => {
+    if (!activeChat) return;
+
+    try {
+      console.log('Stopping stream for chat:', activeChat.id, 'streamId:', activeStreamId);
+      await chatAPI.stopStream(activeChat.id, activeStreamId || undefined);
+      console.log('Stream stopped successfully');
+      
+      // Clear stream state immediately
+      setActiveStreamId(null);
+      setIsStreamActive(false);
+    } catch (error) {
+      console.error('Error stopping stream:', error);
+      // Still clear the stream state even if the API call fails
+      setActiveStreamId(null);
+      setIsStreamActive(false);
     }
   };
 
   return {
-    sendMessage
+    sendMessage,
+    stopStream
   };
 };

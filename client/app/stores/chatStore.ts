@@ -27,49 +27,13 @@ interface ChatState {
   loadChats: () => Promise<void>;
 }
 
-// Initial data for demo purposes
-const initialChats: Chat[] = [
-  {
-    id: '1',
-    title: 'Marketing plan',
-    timestamp: '11:32 A',
-    messages: [
-      { id: '1', role: 'user', content: 'How do I create a marketing plan?', timestamp: '11:32 A' },
-      { 
-        id: '2', 
-        role: 'bot', 
-        content: 'Creating a marketing plan involves defining your goals, understanding your target audience, and devising strategies to reach them. I can help you outline a step-by-step plan if you\'d like! 😊', 
-        timestamp: '11:32 A' 
-      }
-    ]
-  },
-  {
-    id: '2',
-    title: 'Ad copy for launch',
-    timestamp: 'Yest',
-    messages: [
-      { id: '1', role: 'user', content: 'Help me write ad copy for my product launch', timestamp: 'Yesterday' },
-      { id: '2', role: 'bot', content: 'I\'d be happy to help you create compelling ad copy! What product are you launching?', timestamp: 'Yesterday' }
-    ]
-  },
-  {
-    id: '3',
-    title: 'Screening questions',
-    timestamp: 'Apr 17',
-    messages: [
-      { id: '1', role: 'user', content: 'What are good screening questions for interviews?', timestamp: 'Apr 17' },
-      { id: '2', role: 'bot', content: 'Here are some effective screening questions for interviews...', timestamp: 'Apr 17' }
-    ]
-  }
-];
-
 export const useChatStore = create<ChatState>()(
   devtools(
     persist(
       (set, get) => ({
-        // Initial state
-        chats: initialChats,
-        activeChat: initialChats[0],
+        // Initial state - start with empty data
+        chats: [],
+        activeChat: null,
         isCreatingChat: false,
         isLoadingChats: false,
         error: null,
@@ -233,6 +197,7 @@ export const useChatStore = create<ChatState>()(
       }),
       {
         name: 'chat-store', // Storage key
+        version: 1, // Increment this to clear old dummy data
         partialize: (state) => ({ 
           chats: state.chats,
           activeChat: state.activeChat 
